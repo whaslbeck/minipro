@@ -3,6 +3,10 @@
 
 An open source program for controlling XGecu's series of chip programmers.
 
+This repository is a fork of https://gitlab.com/DavidGriffith/minipro
+(the `master` branch tracks the upstream project) with additional T48
+features, see [T48 additions in this fork](#t48-additions-in-this-fork).
+
 This program exists because XGecu does not provide a program for use on
 Linux or other flavors of Unix.  We who keep this project going prefer a
 simple, free, and open-source program that presents a command-line
@@ -18,7 +22,8 @@ interface that allows for a GUI front-end if desired.
 * ZIF40 socket and ISP support
 * Vendor-specific MCU configuration bits
 * Chip ID verification
-* Logic IC testing
+* Bad pin contact test (TL866II+, T48, T76)
+* Logic IC testing and automatic logic IC identification (T48)
 * Bitbang support
 * Overcurrent protection
 * System testing
@@ -29,6 +34,75 @@ interface that allows for a GUI front-end if desired.
 $ minipro -p ATMEGA48 -w atmega48.bin
 $ minipro -p ATMEGA48 -r atmega48.bin
 ```
+
+## T48 additions in this fork
+
+### Bad pin contact test (`-z`)
+
+The pin contact test was only available for the TL866II+ and T76; this
+fork adds it for the T48.  It drives the GND pins of the selected chip
+high while all other pins get a pull-down and checks that every chip
+pin reads back as logic one through its substrate diode.  No supply
+voltage is applied.  Run it before reading a chip that returns
+suspicious data (a constant pattern, a wrong chip ID):
+
+```nohighlight
+$ minipro -p "M27C4002@DIP40" -z
+Bad contact on pin:5
+Bad contact on pin:16
+Bad contact on pin:40
+```
+
+A chip whose VCC pin does not make contact reads as a floating bus, which
+is easy to mistake for a software or database problem.
+
+### Automatic logic IC identification (`-T` without `-p`)
+
+`minipro -p 7400 -T` runs the test vectors of a known logic IC.  Without a
+device name the T48 identifies the chip in the ZIF socket by itself:
+
+```nohighlight
+$ minipro -T
+Probing the ZIF socket...
+Detected a 20 pin package, power pin(s) at 10.
+Testing 30 candidate(s)...
+  74245,7425                               MATCH
+  74645                                    MATCH
+  74540                                    overcurrent
+  ...
+2 matching device(s) found out of 30 tested.
+```
+
+How it works:
+
+1. The socket is probed passively, without powering the chip.  Every pin
+   gets a pull-up, one pin at a time is driven low, and the coupling
+   through the chip's substrate diodes reveals which socket pins are
+   connected, the package size and the power pins (GND for CMOS parts,
+   GND and VCC for bipolar TTL parts).
+2. All logic ICs from `logicic.xml` with the same pin count and a
+   matching power pin layout are collected.  Candidates whose VCC/GND
+   pins match the probe exactly and the most common layouts are tested
+   first; parts with an unusual VCC placement (for example 4049/4050 with
+   VCC on pin 1) are only tried when nothing else matches, so a chip is
+   never powered through a signal pin unnecessarily.
+3. Each candidate is run through the regular logic test.  Devices whose
+   vectors pass are listed as `MATCH`; pin compatible parts (74245 and
+   74645, 7404 and 7414, ...) cannot be told apart by static vectors and
+   show up as multiple matches.  A candidate whose outputs collide with
+   the chip's outputs trips the overcurrent protection, which is reported
+   and cleared before the next candidate.
+
+Use `-o vcc=<value>` to test 3.3 V families (LVC, LV, AHC, ...) at their
+nominal voltage; allowed values are 1.8, 2.5, 3.3 and 5:
+
+```nohighlight
+$ minipro -T -o vcc=3.3
+```
+
+Only the T48 is supported for the automatic identification.  The socket
+numbering has been verified on the hardware with 14, 20 and 40 pin DIP
+packages.
 
 ## Prerequisites
 
@@ -64,11 +138,13 @@ sudo dnf install make pkg-config git gcc libusb1-devel zlib-ng-compat-devel
 
 ### Checkout source code and compile 
 ```nohighlight
-git clone https://gitlab.com/DavidGriffith/minipro.git
+git clone https://github.com/whaslbeck/minipro.git
 cd minipro
 make
 sudo make install
 ```
+(Use https://gitlab.com/DavidGriffith/minipro.git for the upstream
+project without the T48 additions.)
 
 If you have a T56, you'll need to download and install algorithms from
 Xgeku's official software package.
