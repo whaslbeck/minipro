@@ -42,6 +42,7 @@ int t48_erase(minipro_handle_t *handle, uint8_t num_fuses, uint8_t pld);
 int t48_write_jedec_row(minipro_handle_t *handle, jedec_set_t *js);
 int t48_read_jedec_row(minipro_handle_t *handle, jedec_set_t *js);
 int t48_logic_ic_test(minipro_handle_t *handle);
+int t48_logic_ic_check(minipro_handle_t *handle);
 int t48_firmware_update(minipro_handle_t *handle, const char *firmware);
 
 int t48_reset_state(minipro_handle_t *handle);

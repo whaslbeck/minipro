@@ -583,9 +583,13 @@ int t48_read_jedec_row(minipro_handle_t *handle, jedec_set_t *js)
 	return EXIT_SUCCESS;
 }
 
+/* Set when the last do_ic_test() run tripped the overcurrent protection */
+static int logic_test_ovc;
+
 /* Pull: 0=Pull-up, 1=Pull-down */
 static uint8_t *do_ic_test(minipro_handle_t *handle, int pull)
 {
+	logic_test_ovc = 0;
 	uint8_t *vector = handle->device->vectors;
 	uint8_t msg[32];
 	uint8_t *result;
@@ -628,7 +632,9 @@ static uint8_t *do_ic_test(minipro_handle_t *handle, int pull)
 		}
 
 		if (msg[1]) {
-			fprintf(stderr, "Overcurrent protection!\007\n");
+			logic_test_ovc = 1;
+			if (!handle->cmdopts->logic_quiet)
+				fprintf(stderr, "Overcurrent protection!\007\n");
 			free(result);
 			return NULL;
 		}
@@ -658,6 +664,62 @@ static uint8_t *do_ic_test(minipro_handle_t *handle, int pull)
  * The X (don't care) state will leave the pin unconnected.
  * The V (VCC) and G (Ground) state will designate the power supply pins.
  */
+
+/* Compare the two logic test steps against the vector table and
+ * return the number of erroneous pin states. */
+static int count_logic_errors(minipro_handle_t *handle, uint8_t *first_step,
+			      uint8_t *second_step)
+{
+	uint8_t *vector = handle->device->vectors;
+	size_t n = (size_t)handle->device->vector_count *
+		   handle->device->package_details.pin_count;
+	int errors = 0;
+	for (size_t i = 0; i < n; i++) {
+		switch (vector[i]) {
+		case LOGIC_L: /* Pin must be 0 in both steps */
+			if (first_step[i] || second_step[i])
+				errors++;
+			break;
+		case LOGIC_H: /* Pin must be 1 in both steps */
+			if (!first_step[i] || !second_step[i])
+				errors++;
+			break;
+		case LOGIC_Z: /* Pin must be 1 in step 1 and 0 in step 2 */
+			if (!first_step[i] || second_step[i])
+				errors++;
+			break;
+		}
+	}
+	return errors;
+}
+
+/* Quiet logic test used by the automatic IC detection.
+ * Returns the number of errors (0 = the chip matches the vector table),
+ * MP_LOGIC_OVC if the overcurrent protection tripped or -1 on any other
+ * error. The transaction is always closed so that the programmer is ready
+ * for the next candidate. */
+int t48_logic_ic_check(minipro_handle_t *handle)
+{
+	uint8_t *first_step, *second_step = NULL;
+	int errors = -1;
+
+	if (handle->device->chip_type != MP_LOGIC ||
+	    !handle->device->vector_count)
+		return -1;
+	handle->cmdopts->logic_quiet = 1;
+	if ((first_step = do_ic_test(handle, 0)) &&
+	    (second_step = do_ic_test(handle, 1)))
+		errors = count_logic_errors(handle, first_step, second_step);
+	else if (logic_test_ovc)
+		errors = MP_LOGIC_OVC;
+	handle->cmdopts->logic_quiet = 0;
+	free(second_step);
+	free(first_step);
+	/* Close the transaction, this also clears the overcurrent state */
+	if (t48_end_transaction(handle) || t48_reset_state(handle))
+		return -1;
+	return errors;
+}
 
 int t48_logic_ic_test(minipro_handle_t *handle)
 {

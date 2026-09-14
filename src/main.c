@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "database.h"
+#include "logic_detect.h"
 #include "jedec.h"
 #include "ihex.h"
 #include "srec.h"
@@ -1003,6 +1004,10 @@ void parse_cmdline(int argc, char **argv, cmdopts_t *cmdopts)
        * version is known.
        */
 		case 'o':
+			/* Remember the VCC option for the logic IC detection,
+			 * everything else is handled by parse_options() */
+			if (!strncasecmp(optarg, "vcc=", 4))
+				cmdopts->logic_vcc = optarg + 4;
 			break;
 		case 'F':
 			firmware_update_and_exit(optarg);
@@ -1048,8 +1053,9 @@ void parse_cmdline(int argc, char **argv, cmdopts_t *cmdopts)
 		break;
 	}
 
-	/* Check if a device name is required */
-	if (!cmdopts->device_name) {
+	/* Check if a device name is required.
+	 * -T without -p runs the automatic logic IC detection. */
+	if (!cmdopts->device_name && cmdopts->action != LOGIC_IC_TEST) {
 		fprintf(stderr,
 			"Device required. Use -p <device> to specify a device.\n");
 		print_help_and_exit(argv[0]);
@@ -3484,6 +3490,13 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	fprintf(stderr, "\n");
+
+	/* Automatic logic IC detection (-T without -p) */
+	if (cmdopts.action == LOGIC_IC_TEST && !cmdopts.device_name) {
+		int ret = logic_ic_detect(handle);
+		minipro_close(handle);
+		return ret;
+	}
 
 	/* Get the requested device */
 	if (get_device(handle)) {

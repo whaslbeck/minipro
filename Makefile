@@ -59,7 +59,7 @@ endif
 COMMON_OBJECTS=src/xml.o src/jedec.o src/ihex.o src/srec.o src/database.o \
 		src/bitbang.o src/prom.o src/minipro.o src/tl866a.o \
 		src/tl866iiplus.o src/t48.o src/t56.o src/t76.o src/version.o \
-		src/cdecode.o src/cencode.o $(USB)
+		src/cdecode.o src/cencode.o src/logic_detect.o $(USB)
 OBJECTS=$(COMMON_OBJECTS) src/main.o
 PROGS=minipro
 STATIC_LIB=src/libminipro.a

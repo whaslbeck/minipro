@@ -197,6 +197,12 @@ Specify device (use quotes to avoid mangling by the shell).
 .B \-T, \-\-logic_test
 RAM and/or Logic IC test.  Erroneous states for logic test are reported
 with a "\-" (minus) sign next to the expected pin state.
+.br
+Without \-p the chip in the ZIF socket is identified automatically
+(T48 only): the socket is probed without applying power to find the
+package size and the ground pins, then the test vectors of every matching
+logic IC from logicic.xml are run and the matching devices are listed.
+Use \-o vcc=<value> to set the test voltage (1.8, 2.5, 3.3, 5).
 
 .TP
 .B \-i, \-\-icsp_vcc

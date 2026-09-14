@@ -420,6 +420,7 @@ minipro_handle_t *minipro_open(uint8_t verbose)
 		handle->minipro_set_voltages = t48_set_voltages;
 		handle->minipro_hardware_check = t48_hardware_check;
 		handle->minipro_pin_test = t48_pin_test;
+		handle->minipro_logic_ic_check = t48_logic_ic_check;
 		break;
 	case MP_T56:
 		handle->minipro_begin_transaction = t56_begin_transaction;
@@ -918,6 +919,15 @@ int minipro_pin_test(minipro_handle_t *handle)
 	int ret = handle->minipro_pin_test(handle, map);
 	free(map);
 	return ret;
+}
+
+/* Quiet logic test: returns the error count or -1 (see t48_logic_ic_check) */
+int minipro_logic_ic_check(minipro_handle_t *handle)
+{
+	assert(handle != NULL);
+	if (!handle->minipro_logic_ic_check)
+		return -1;
+	return handle->minipro_logic_ic_check(handle);
 }
 
 int minipro_logic_ic_test(minipro_handle_t *handle)

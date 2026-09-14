@@ -289,6 +289,11 @@ typedef struct state_machine_d {
 	uint32_t logic_count;
 	uint32_t logic_custom_count;
 	uint8_t load_vectors;
+	/* list_logic_devices mode */
+	logic_device_cb_t logic_cb;
+	void *logic_ctx;
+	int logic_pin_filter;
+	int logic_pending;
 } state_machine_d_t;
 
 /* State machine structure used by sax profile parser callback function
@@ -1460,6 +1465,42 @@ static int device_callback(int type, const char *tag, size_t taglen,
 			    sm->db_data->db_version != sm->db_version)
 				return XML_OK;
 
+			/* Enumerate logic devices (list_logic_devices) */
+			if (sm->logic_cb) {
+				if (sm->logic_pending) {
+					/* Hand over the previous device */
+					if (sm->logic_cb(sm->device,
+							 sm->logic_ctx))
+						return EXIT_FAILURE;
+					sm->device = calloc(1,
+							    sizeof(device_t));
+					if (!sm->device)
+						return EXIT_FAILURE;
+					sm->logic_pending = 0;
+				}
+				sm->load_vectors = 0;
+				if (load_device(sm->db_data, tag, taglen,
+						sm->device,
+						sm->db_data->db_version))
+					return EXIT_FAILURE;
+				if (sm->device->chip_type != MP_LOGIC ||
+				    (sm->logic_pin_filter &&
+				     sm->device->package_details.pin_count !=
+					     sm->logic_pin_filter)) {
+					memset(sm->device, 0,
+					       sizeof(device_t));
+					return XML_OK;
+				}
+				size_t len = mb_name.z < NAME_LEN - 1 ?
+						     mb_name.z :
+						     NAME_LEN - 1;
+				memcpy(sm->device->name, mb_name.b, len);
+				sm->device->name[len] = 0;
+				sm->load_vectors = 1;
+				sm->logic_pending = 1;
+				return XML_OK;
+			}
+
 			/* Only print device name */
 			if (sm->print_name) {
 				/* Print only devices that match the chip ID (SPI autodetect -a) */
@@ -1898,6 +1939,47 @@ int list_devices(db_data_t *db_data)
 	if (db_data->count)
 		*(db_data->count) = sm.found_count;
 	return EXIT_SUCCESS;
+}
+
+/* Enumerate all logic devices of the logicic.xml database.
+ * If pin_count is non zero only devices with that pin count are returned.
+ * The callback receives a heap allocated, fully loaded device (vectors
+ * included) and takes ownership of it. */
+int list_logic_devices(db_data_t *db_data, int pin_count,
+		       logic_device_cb_t cb, void *ctx)
+{
+	state_machine_d_t sm;
+	memset(&sm, 0, sizeof(sm));
+	sm.device = calloc(1, sizeof(device_t));
+	if (!sm.device) {
+		fprintf(stderr, "Out of memory\n");
+		return EXIT_FAILURE;
+	}
+	sm.db_version = -1;
+	sm.custom = -1;
+	sm.db_data = db_data;
+	sm.logic_cb = cb;
+	sm.logic_ctx = ctx;
+	sm.logic_pin_filter = pin_count;
+	db_data->db_version = LOGIC_DATABASE;
+
+	int ret = parse_xml_file(&sm, LOGICIC_NAME, db_data->logicic_path);
+	if (!ret && sm.logic_pending) {
+		/* Hand over the last device */
+		ret = cb(sm.device, ctx);
+		sm.device = NULL;
+	}
+	if (sm.device) {
+		free(sm.device->vectors);
+		free(sm.device);
+	}
+	return ret;
+}
+
+/* Return the logic IC test voltage table */
+const parameters_t *get_logic_vcc_table(void)
+{
+	return vcc_logic_voltages;
 }
 
 /* Print database chip count */

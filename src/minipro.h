@@ -325,6 +325,8 @@ typedef struct cmdopts_s {
 	uint8_t force_erase;
 	uint8_t set_spi_clock;
 	uint8_t set_i2c_addr;
+	uint8_t logic_quiet; /* suppress logic test messages (auto detect) */
+	char *logic_vcc;     /* -o vcc=<value> for the logic IC detection */
 	int filter_fuses;
 	int filter_locks;
 	int filter_uid;
@@ -378,6 +380,7 @@ typedef struct minipro_handle {
 	int (*minipro_firmware_update)(struct minipro_handle *, const char *);
 	int (*minipro_pin_test)(struct minipro_handle *, pin_map_t *);
 	int (*minipro_logic_ic_test)(struct minipro_handle *);
+	int (*minipro_logic_ic_check)(struct minipro_handle *);
 	int (*minipro_reset_state)(struct minipro_handle *);
 	int (*minipro_set_zif_direction)(struct minipro_handle *, uint8_t *);
 	int (*minipro_set_zif_state)(struct minipro_handle *, uint8_t *);
@@ -442,4 +445,6 @@ int minipro_get_zif_state(minipro_handle_t *handle, uint8_t *zif_state);
 int minipro_set_pin_drivers(minipro_handle_t *handle, pin_driver_t *pins);
 int minipro_set_voltages(minipro_handle_t *handle, uint8_t vcc, uint8_t vpp);
 int minipro_reset_state(minipro_handle_t *handle);
+#define MP_LOGIC_OVC (-2) /* logic_ic_check: overcurrent protection tripped */
+int minipro_logic_ic_check(minipro_handle_t *handle);
 #endif
