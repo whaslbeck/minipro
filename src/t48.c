@@ -1661,3 +1661,58 @@ int t48_hardware_check(minipro_handle_t *handle)
 		fprintf(stderr, "\nHardware test completed successfully!\n");
 	return EXIT_SUCCESS;
 }
+
+/* Bad pin contact test.
+ * The firmware numbers ZIF pins in the TL866II+ 40-pin frame: chip pin 1 is
+ * at ZIF pin 1 and the right hand column of the chip is aligned to ZIF pin
+ * 40 (measured on a DIP40 EPROM: VCC/pin 40 is driven at ZIF pin 40, GND
+ * pins 11/30 at ZIF pins 11/30). The <maps> table of the database uses the
+ * same numbering. The GND pins of the chip are driven high while every
+ * other pin is pulled down; a chip pin that makes contact is lifted through
+ * its substrate (ESD) diode and reads back as logic one. */
+int t48_pin_test(minipro_handle_t *handle, pin_map_t *map)
+{
+	int p_pins = 40;
+	int d_pins = handle->device->package_details.pin_count;
+	int x_pin = d_pins / 2;
+	int pno = p_pins - d_pins;
+	uint8_t dir[T48_NPINS], state[T48_NPINS], zif[T48_NPINS];
+
+	if (!map->gnd_count) {
+		fprintf(stderr, "Pin test is not available for this chip.\n");
+		return EXIT_FAILURE;
+	}
+
+	/* All pins input with pull-down, GND pins output high */
+	memset(dir, MP_PIN_DIRECTION_IN, sizeof(dir));
+	memset(state, 0x00, sizeof(state));
+	memset(zif, 0x00, sizeof(zif));
+	for (int i = 0; i < map->gnd_count; i++) {
+		if (map->gnd_table[i] < 1 || map->gnd_table[i] > p_pins)
+			continue;
+		dir[map->gnd_table[i] - 1] = MP_PIN_DIRECTION_OUT;
+		state[map->gnd_table[i] - 1] = 1;
+	}
+
+	if (t48_reset_state(handle) || t48_set_zif_direction(handle, dir) ||
+	    t48_set_zif_state(handle, state) ||
+	    t48_get_zif_state(handle, zif) || t48_reset_state(handle))
+		return EXIT_FAILURE;
+
+	/* Now check for bad pin contact */
+	int ret = EXIT_SUCCESS;
+	for (int i = 0; i < map->mask_count; i++) {
+		/* map programmer pin# to device pin# */
+		int p_pin = map->mask[i];
+		int d_pin = p_pin > x_pin ? p_pin - pno : p_pin;
+		if (p_pin < 1 || p_pin > p_pins)
+			continue;
+		if (!zif[p_pin - 1]) {
+			fprintf(stderr, "Bad contact on pin:%u\n", d_pin);
+			ret = EXIT_FAILURE;
+		}
+	}
+	if (!ret)
+		fprintf(stderr, "Pin test passed.\n");
+	return ret;
+}

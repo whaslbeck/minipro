@@ -3521,6 +3521,7 @@ int main(int argc, char **argv)
 	/* Run a bad pin contact test if requested. */
 	if (cmdopts.pincheck) {
 		if ((handle->version == MP_TL866IIPLUS ||
+		     handle->version == MP_T48 ||
 		     handle->version == MP_T76) &&
 		    !cmdopts.icsp) {
 			if (minipro_pin_test(handle)) {

@@ -56,5 +56,6 @@ int t48_set_input_and_pullup(minipro_handle_t *handle);
 int t48_set_input_and_pulldown(minipro_handle_t *handle);
 
 int t48_hardware_check(minipro_handle_t *handle);
+int t48_pin_test(minipro_handle_t *handle, pin_map_t *map);
 
 #endif

@@ -419,6 +419,7 @@ minipro_handle_t *minipro_open(uint8_t verbose)
 		handle->minipro_set_pin_drivers = t48_set_pin_drivers;
 		handle->minipro_set_voltages = t48_set_voltages;
 		handle->minipro_hardware_check = t48_hardware_check;
+		handle->minipro_pin_test = t48_pin_test;
 		break;
 	case MP_T56:
 		handle->minipro_begin_transaction = t56_begin_transaction;
